@@ -1,0 +1,6 @@
+{
+  "name": "Chicali DAW Vocals",
+  "description": "Estación de Trabajo de Audio Digital simplificada para grabar voz sobre pistas con letras sincronizadas por IA.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": []
+}
