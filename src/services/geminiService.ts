@@ -13,7 +13,7 @@ export async function detectAudioKey(base64Audio: string, mimeType: string, cust
         role: "user",
         parts: [
           { inlineData: { data: base64Audio, mimeType: mimeType } },
-          { text: "Analiza este audio y dime exclusivamente la tonalidad musical (ej: 'C Major', 'A Minor'). Responde solo con el nombre de la tonalidad." },
+          { text: "Analiza este audio musical y detecta la tonalidad exacta (ej: 'C Major', 'F# Minor'). Responde únicamente con el nombre de la tonalidad." },
         ],
       },
     });
@@ -36,14 +36,14 @@ export async function extractLyricsFromAudio(base64Audio: string, mimeType: stri
         role: "user",
         parts: [
           { inlineData: { data: base64Audio, mimeType: mimeType } },
-          { text: "Transcripción de Audio Musical: Escucha este audio y extrae la letra completa. Formato OBLIGATORIO: Agrega marcas de tiempo exactas al inicio de cada frase usando el formato [MM:SS]. Ejemplo:\n[00:05] Primera línea de la canción\n[00:10] Segunda línea...\nNo agregues texto adicional, solo las líneas con tiempo." },
+          { text: "Transcripción Musical Profesional y Ultra-Detallada:\nEscucha este audio y extrae la letra EXACTA palabra por palabra.\n\nINSTRUCCIONES DE PRECISIÓN:\n1. NO RESUMAS NADA. Si el artista repite una palabra (ej. 'miente, miente, miente'), escríbela exactamente las veces que suena.\n2. CAPTURA VOCALIZACIONES: Incluye 'no no no', 'uuh', 'yeah', 'ay', etc., especialmente en las intros y puentes.\n3. MARCAS DE TIEMPO: Inserta [MM:SS] al inicio de cada frase de forma sincronizada.\n4. FIDELIDAD: Si el cantante arrastra una palabra o dice algo fonéticamente distinto, prioriza lo que se escucha sobre la letra oficial.\n\nFormato:\n[00:00] (Intro vocal)\n[00:05] Frase exacta...\n\nResponde solo con la letra sincronizada." },
         ],
       },
     });
     return response.text || "";
   } catch (error) {
     console.error("Error extracting lyrics:", error);
-    return "Error al procesar audio. Revisa tu API Key.";
+    return "Error en transcripción. Verifica tu API Key.";
   }
 }
 

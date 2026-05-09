@@ -36,6 +36,7 @@ export default function App() {
   const [detectedKey, setDetectedKey] = useState<string | null>(null);
   const [activeLineIndex, setActiveLineIndex] = useState(-1);
   const [apiKey, setApiKey] = useState(process.env.GEMINI_API_KEY || '');
+  const [syncOffset, setSyncOffset] = useState(0); // Offset in seconds
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -104,7 +105,12 @@ export default function App() {
         };
 
         mediaRecorder.onstop = () => {
-          const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          console.log("Recording stopped, chunks:", audioChunksRef.current.length);
+          if (audioChunksRef.current.length === 0) {
+            console.error("No audio data captured!");
+            return;
+          }
+          const blob = new Blob(audioChunksRef.current, { type: 'audio/webm;codecs=opus' });
           const url = URL.createObjectURL(blob);
           setRecordedVocalUrl(url);
           stream.getTracks().forEach(track => track.stop());
@@ -211,9 +217,11 @@ export default function App() {
       setCurrentTime(transportTime);
 
       if (lyrics.length > 0) {
+        // Apply sync offset to the search time
+        const searchTime = transportTime + syncOffset;
         let foundIndex = -1;
         for (let i = lyrics.length - 1; i >= 0; i--) {
-          if (transportTime >= lyrics[i].startTime) {
+          if (searchTime >= lyrics[i].startTime) {
             foundIndex = i;
             break;
           }
@@ -248,14 +256,32 @@ export default function App() {
     }
   }, [activeLineIndex]);
 
-  const exportToSyncedText = () => {
+  const exportToSRT = () => {
     if (lyrics.length === 0) return;
-    const formatTime = (s: number) => `[${Math.floor(s/60).toString().padStart(2,'0')}:${Math.floor(s%60).toString().padStart(2,'0')}]`;
-    const content = lyrics.map(l => `${formatTime(l.startTime)} ${l.text}`).join('\n');
-    const blob = new Blob([content], { type: 'text/plain' });
+
+    const formatSRTTime = (seconds: number) => {
+      const date = new Date(seconds * 1000);
+      const diff = seconds % 1;
+      const ms = Math.floor(diff * 1000).toString().padStart(3, '0');
+      const timePart = date.toISOString().substr(11, 8);
+      return `${timePart},${ms}`;
+    };
+
+    let content = '';
+    lyrics.forEach((line, i) => {
+      const nextLine = lyrics[i + 1];
+      const endTime = nextLine ? nextLine.startTime : line.startTime + 5;
+      
+      content += `${i + 1}\n`;
+      content += `${formatSRTTime(line.startTime)} --> ${formatSRTTime(endTime)}\n`;
+      content += `${line.text}\n\n`;
+    });
+
+    const blob = new Blob([content], { type: 'text/srt' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `take_lyrics_${Date.now()}.txt`;
+    a.href = url;
+    a.download = `session_captions_${Date.now()}.srt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -355,8 +381,24 @@ export default function App() {
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-[9px] font-mono text-[#8E9299] uppercase">BPM SYNC</label>
-                <input type="number" value={settings.bpm} onChange={e => setSettings({...settings, bpm: parseInt(e.target.value) || 120})} className="w-full bg-[#151519] border border-[#1F1F23] rounded-lg p-2 text-xs font-mono text-center outline-none" />
+                <label className="text-[9px] font-mono text-[#8E9299] uppercase flex justify-between">
+                  <span>LYRIC SYNC</span>
+                  <span className="text-[#F27D26]">{syncOffset > 0 ? '+' : ''}{syncOffset.toFixed(1)}s</span>
+                </label>
+                <div className="flex gap-1">
+                  <button 
+                    onClick={() => setSyncOffset(prev => prev - 0.1)}
+                    className="flex-1 bg-[#151519] border border-[#1F1F23] rounded-lg p-2 hover:bg-[#1F1F23] transition-all"
+                  >
+                    <ChevronDown size={14} className="mx-auto" />
+                  </button>
+                  <button 
+                    onClick={() => setSyncOffset(prev => prev + 0.1)}
+                    className="flex-1 bg-[#151519] border border-[#1F1F23] rounded-lg p-2 hover:bg-[#1F1F23] transition-all"
+                  >
+                    <ChevronUp size={14} className="mx-auto" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -390,6 +432,15 @@ export default function App() {
             </div>
           </div>
           
+          {lyrics.length > 0 && (
+            <button 
+              onClick={exportToSRT}
+              className="w-full py-2 bg-[#1F1F23]/50 text-[#8E9299] hover:text-white rounded border border-[#1F1F23] text-[9px] uppercase font-mono tracking-widest flex items-center justify-center gap-2 transition-all mb-4"
+            >
+              <Download size={12} /> EXPORT SESSION SRT
+            </button>
+          )}
+
           <div className="flex gap-2">
             <button onClick={resetSession} className="w-12 h-12 rounded-xl bg-[#151519] border border-[#1F1F23] flex items-center justify-center hover:bg-[#1F1F23] transition-all"><RotateCcw size={18} /></button>
             <button 
@@ -418,9 +469,9 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={exportToSyncedText} className="px-4 py-1.5 rounded-full border border-[#1F1F23] text-[9px] font-bold text-[#8E9299] hover:text-white uppercase transition-all">Exportar SRT/Sincro</button>
+            <button onClick={exportToSRT} className="px-4 py-1.5 rounded-full border border-[#1F1F23] text-[9px] font-bold text-[#8E9299] hover:text-white uppercase transition-all">Exportar SRT</button>
             <div className="h-4 w-px bg-[#1F1F23]" />
-            <Settings2 size={18} className="text-[#3A3A40] hover:text-white cursor-pointer" />
+            <Settings2 onClick={() => setViewMode('settings')} size={18} className="text-[#3A3A40] hover:text-white cursor-pointer" />
           </div>
         </header>
 
@@ -496,6 +547,21 @@ export default function App() {
                 {/* GRADIENTS */}
                 <div className="absolute top-0 w-full h-48 bg-gradient-to-b from-[#050505] to-transparent z-20 pointer-events-none" />
                 <div className="absolute bottom-0 w-full h-48 bg-gradient-to-t from-[#050505] to-transparent z-20 pointer-events-none" />
+
+                {/* HUD INFO OVERLAY */}
+                <div className="absolute top-6 right-8 z-30 pointer-events-none">
+                  <div className="bg-black/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/5 flex flex-col items-end gap-1">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                      <span className="text-[10px] font-mono text-white/50 uppercase tracking-tighter">
+                        SYNC_OFFSET: {syncOffset > 0 ? '+' : ''}{syncOffset.toFixed(1)}s
+                      </span>
+                    </div>
+                    <div className="text-[11px] font-mono text-[#F27D26] uppercase font-bold">
+                      CLOCK: {currentTime.toFixed(2)}s
+                    </div>
+                  </div>
+                </div>
               </motion.div>
             )}
 
